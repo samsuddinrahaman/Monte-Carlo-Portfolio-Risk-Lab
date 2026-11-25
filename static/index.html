@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Indian Equity Monte Carlo Risk Lab (VaR &amp; ES)</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js" defer></script>
+</head>
+<body>
+  <div class="ambient-bg" aria-hidden="true">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <header class="app-header">
+    <div class="header-inner">
+      <div>
+        <p class="eyebrow">NSE / BSE Live Market Simulation</p>
+        <h1>Monte Carlo Portfolio Risk Lab</h1>
+        <p class="subtitle">10,000 Cholesky-correlated futures, Value at Risk (VaR), Expected Shortfall (ES), and correlation stress testing.</p>
+      </div>
+      <div class="header-meta">
+        <span id="data-badge" class="status-pill">Ready</span>
+        <button type="button" id="refresh-btn" class="btn btn-secondary">Refresh Live Data</button>
+        <button type="button" id="help-btn" class="btn btn-secondary">Help</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="dashboard">
+    <aside class="panel controls-panel glass-card" aria-label="Simulation Controls">
+      <div class="panel-header">
+        <h2>Portfolio &amp; Simulation</h2>
+      </div>
+
+      <form id="sim-form" novalidate>
+        <div class="field">
+          <div class="picker-top-row">
+            <label for="stock-search">Select Indian Stocks</label>
+            <div class="exchange-toggle" role="group" aria-label="Stock Exchange">
+              <button type="button" class="exch-btn active" data-exchange="NS" aria-pressed="true">NSE (.NS)</button>
+              <button type="button" class="exch-btn" data-exchange="BO" aria-pressed="false">BSE (.BO)</button>
+            </div>
+          </div>
+          <span id="tickers-hint" class="hint">Search by company name or symbol, then click to add (2–10 stocks)</span>
+
+          <div class="combobox-wrap" id="stock-combobox">
+            <input
+              type="search"
+              id="stock-search"
+              placeholder="Search Reliance, TCS, HDFC Bank..."
+              autocomplete="off"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded="false"
+              aria-controls="stock-listbox"
+              aria-describedby="tickers-hint"
+            >
+            <ul id="stock-listbox" class="stock-listbox" role="listbox" aria-label="Matching Indian stocks" hidden></ul>
+          </div>
+
+          <div id="selected-stocks" class="selected-stocks" aria-label="Selected portfolio stocks"></div>
+          <input
+            type="hidden"
+            id="tickers-input"
+            name="tickers"
+            required
+            value=""
+            data-error="tickers-error"
+          >
+          <div id="tickers-error" class="error-msg">
+            <span role="img" aria-label="Error">!</span> Select between 2 and 10 Indian stocks.
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="weights-input">Custom Weights (optional)</label>
+          <span id="weights-hint" class="hint">Leave blank for equal weights, or enter comma-separated numbers</span>
+          <input
+            type="text"
+            id="weights-input"
+            name="weights"
+            placeholder="e.g. 25, 25, 20, 15, 15"
+            aria-describedby="weights-hint"
+            data-error="weights-error"
+          >
+          <div id="weights-error" class="error-msg">
+            <span role="img" aria-label="Error">!</span> Weights must be positive numbers matching the ticker count.
+          </div>
+        </div>
+
+        <div class="field-grid">
+          <div class="field">
+            <label for="portfolio-value">Portfolio Value (INR)</label>
+            <input
+              type="number"
+              id="portfolio-value"
+              name="portfolioValue"
+              required
+              min="1000"
+              step="any"
+              value="1000000"
+              data-error="value-error"
+            >
+            <div id="value-error" class="error-msg">
+              <span role="img" aria-label="Error">!</span> Enter a value of at least 1,000 INR.
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="period-select">Lookback Period</label>
+            <select id="period-select" name="period">
+              <option value="2y" selected>2 Years (Min)</option>
+              <option value="3y">3 Years</option>
+              <option value="5y">5 Years</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field-grid">
+          <div class="field">
+            <label for="horizon-days">Holding Days</label>
+            <input
+              type="number"
+              id="horizon-days"
+              name="horizonDays"
+              required
+              min="1"
+              max="252"
+              value="21"
+              data-error="horizon-error"
+            >
+            <div id="horizon-error" class="error-msg">
+              <span role="img" aria-label="Error">!</span> Enter 1 to 252 trading days.
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="confidence-select">Confidence Level</label>
+            <select id="confidence-select" name="confidence">
+              <option value="0.90">90%</option>
+              <option value="0.95" selected>95%</option>
+              <option value="0.99">99%</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="sims-input">Monte Carlo Paths</label>
+          <input
+            type="number"
+            id="sims-input"
+            name="sims"
+            required
+            min="500"
+            max="50000"
+            step="1"
+            value="10000"
+            data-error="sims-error"
+          >
+          <div id="sims-error" class="error-msg">
+            <span role="img" aria-label="Error">!</span> Enter between 500 and 50,000 paths.
+          </div>
+        </div>
+
+        <button type="submit" id="run-btn" class="btn btn-primary">Run Simulation</button>
+      </form>
+
+      <section class="stress-box" aria-labelledby="stress-heading">
+        <div class="stress-header">
+          <h3 id="stress-heading">Correlation Stress Control</h3>
+          <span id="stress-badge" class="mono-badge">Historical</span>
+        </div>
+
+        <label class="toggle-row" for="cholesky-toggle">
+          <input type="checkbox" id="cholesky-toggle" checked>
+          <span>Use Cholesky Correlation Matrix</span>
+        </label>
+
+        <div class="slider-group">
+          <div class="slider-labels">
+            <label for="stress-slider">Stress Blend (&alpha;)</label>
+            <span id="stress-alpha-val" class="mono-val">0.00</span>
+          </div>
+          <input type="range" id="stress-slider" min="0" max="0.97" step="0.01" value="0">
+          <div class="slider-ticks">
+            <span>Historical</span>
+            <span>Moderate (0.50)</span>
+            <span>Crisis (0.97)</span>
+          </div>
+        </div>
+        <p class="stress-note">
+          Blends historical correlation toward 1.0: <code>R(&alpha;) = (1 &minus; &alpha;)R<sub>hist</sub> + &alpha;J</code>.
+          Drag to watch diversification fail in real time.
+        </p>
+      </section>
+    </aside>
+
+    <section class="results-area" aria-label="Simulation Results">
+      <div id="error-banner" class="error-banner" role="alert" hidden></div>
+
+      <div class="kpi-grid">
+        <article class="kpi-card glass-card kpi-var">
+          <div class="kpi-top">
+            <span class="kpi-label"><span id="kpi-conf-var">95%</span> Value at Risk (VaR)</span>
+            <span id="kpi-var-delta" class="kpi-pill">vs Uncorr</span>
+          </div>
+          <strong id="kpi-var-pct" class="kpi-value">--</strong>
+          <span id="kpi-var-inr" class="kpi-sub">--</span>
+        </article>
+        <article class="kpi-card glass-card kpi-es">
+          <div class="kpi-top">
+            <span class="kpi-label"><span id="kpi-conf-es">95%</span> Expected Shortfall (ES)</span>
+            <span id="kpi-es-ratio" class="kpi-pill">Tail Avg</span>
+          </div>
+          <strong id="kpi-es-pct" class="kpi-value">--</strong>
+          <span id="kpi-es-inr" class="kpi-sub">--</span>
+        </article>
+        <article class="kpi-card glass-card">
+          <div class="kpi-top">
+            <span class="kpi-label">Expected Horizon Return</span>
+          </div>
+          <strong id="kpi-mean-pct" class="kpi-value">--</strong>
+          <span id="kpi-range" class="kpi-sub">Range: --</span>
+        </article>
+        <article class="kpi-card glass-card">
+          <div class="kpi-top">
+            <span class="kpi-label">Avg Pairwise Correlation</span>
+          </div>
+          <strong id="kpi-corr" class="kpi-value">--</strong>
+          <span id="kpi-scenario" class="kpi-sub">Historical</span>
+        </article>
+      </div>
+
+      <article id="insight-banner" class="panel glass-card insight-banner" aria-live="polite">
+        <span class="insight-tag">Risk Insight</span>
+        <p id="insight-text">Select 2 to 10 Indian stocks (.NS or .BO) and click Run Simulation to evaluate portfolio tail risk and correlation impact.</p>
+      </article>
+
+      <div class="charts-grid">
+        <article class="panel glass-card chart-card">
+          <div class="chart-head">
+            <h3>Simulated Return Distribution</h3>
+            <span id="hist-meta" class="muted-meta">10,000 paths</span>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="hist-canvas" width="640" height="280" aria-label="Simulated portfolio return histogram"></canvas>
+            <div id="hist-tooltip" class="chart-tooltip" hidden></div>
+          </div>
+        </article>
+
+        <article class="panel glass-card chart-card">
+          <div class="chart-head">
+            <h3>Correlation Sensitivity Curve</h3>
+            <span class="muted-meta">Diversification Breakdown</span>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="sens-canvas" width="640" height="280" aria-label="Correlation sensitivity chart"></canvas>
+            <div id="sens-tooltip" class="chart-tooltip" hidden></div>
+          </div>
+        </article>
+      </div>
+
+      <div class="bottom-grid">
+        <article class="panel glass-card table-panel">
+          <div class="chart-head">
+            <h3>Live NSE/BSE Stock Parameters</h3>
+            <span id="obs-meta" class="muted-meta">--</span>
+          </div>
+          <div tabindex="0" role="region" aria-labelledby="stocks-table-caption" class="table-wrapper">
+            <table id="stocks-table">
+              <caption id="stocks-table-caption" class="visually-hidden">Live stock prices, weights, annualized return and volatility</caption>
+              <thead>
+                <tr>
+                  <th>Ticker</th>
+                  <th>Weight</th>
+                  <th>Latest Price</th>
+                  <th>Ann. Return</th>
+                  <th>Ann. Vol</th>
+                </tr>
+              </thead>
+              <tbody id="stocks-tbody"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel glass-card heatmap-panel">
+          <div class="chart-head">
+            <h3>Active Correlation Matrix</h3>
+            <span class="muted-meta">Cholesky Input</span>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="corr-canvas" width="480" height="340" aria-label="Stock correlation matrix heatmap"></canvas>
+          </div>
+        </article>
+      </div>
+
+      <article class="panel glass-card table-panel">
+        <div class="chart-head">
+          <h3>Correlation Sensitivity Breakdown</h3>
+          <span class="muted-meta">Uncorrelated vs Historical vs Crisis</span>
+        </div>
+        <div tabindex="0" role="region" aria-labelledby="sens-table-caption" class="table-wrapper">
+          <table id="sens-table">
+            <caption id="sens-table-caption" class="visually-hidden">Portfolio VaR and Expected Shortfall across correlation regimes</caption>
+            <thead>
+              <tr>
+                <th>Scenario</th>
+                <th>Avg Corr</th>
+                <th>VaR (%)</th>
+                <th>VaR (INR)</th>
+                <th>ES (%)</th>
+                <th>ES (INR)</th>
+              </tr>
+            </thead>
+            <tbody id="sens-tbody"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <section class="panel glass-card outcome-guide" aria-labelledby="outcome-heading">
+        <div class="chart-head">
+          <h3 id="outcome-heading">What These Outcomes Mean (Plain-English Summary)</h3>
+          <span class="muted-meta">Updated live from your simulation</span>
+        </div>
+        <div class="guide-grid">
+          <article class="guide-item guide-var">
+            <h4>1. Value at Risk (VaR) — Threshold Loss</h4>
+            <p id="guide-var-text">Waiting for simulation...</p>
+          </article>
+          <article class="guide-item guide-es">
+            <h4>2. Expected Shortfall (ES) — Worst-Case Average</h4>
+            <p id="guide-es-text">Waiting for simulation...</p>
+          </article>
+          <article class="guide-item guide-corr">
+            <h4>3. Correlation &amp; Diversification Impact</h4>
+            <p id="guide-corr-text">Waiting for simulation...</p>
+          </article>
+          <article class="guide-item guide-stress">
+            <h4>4. Crisis Stress — Why Diversification Fails</h4>
+            <p id="guide-stress-text">Waiting for simulation...</p>
+          </article>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <dialog id="help-dialog" class="help-dialog" closedby="any" aria-labelledby="help-title">
+    <div class="help-dialog-head">
+      <h1 id="help-title">Inputs &amp; Financial Terminology Guide</h1>
+      <form method="dialog">
+        <button type="submit" class="btn btn-secondary help-close-btn" autofocus aria-label="Close help">Close</button>
+      </form>
+    </div>
+
+    <div class="help-dialog-body">
+      <section class="help-section">
+        <h2>How the Inputs Work</h2>
+        <dl class="help-list">
+          <div class="help-row">
+            <dt>Exchange Toggle (NSE <code>.NS</code> / BSE <code>.BO</code>)</dt>
+            <dd>Switches the search dropdown between India's National Stock Exchange (<code>.NS</code>) and Bombay Stock Exchange (<code>.BO</code>).</dd>
+          </div>
+          <div class="help-row">
+            <dt>Select Indian Stocks (2–10)</dt>
+            <dd>Search by company name or ticker symbol and click to add or remove stocks. You need at least 2 stocks to measure correlation.</dd>
+          </div>
+          <div class="help-row">
+            <dt>Custom Weights (optional)</dt>
+            <dd>Comma-separated numbers matching your stock count (e.g., <code>30, 25, 25, 20</code>). Automatically normalized to 100%; leave blank for equal weights.</dd>
+          </div>
+          <div class="help-row">
+            <dt>Portfolio Value (INR)</dt>
+            <dd>Total capital invested in ₹ (minimum ₹1,000). Converts percentage risk into rupee loss amounts.</dd>
+          </div>
+          <div class="help-row">
+            <dt>Lookback Period (2y / 3y / 5y)</dt>
+            <dd>Historical daily price window fetched from Yahoo Finance to estimate returns, volatility, and correlations.</dd>
+          </div>
+          <div class="help-row">
+            <dt>Holding Days</dt>
+            <dd>Risk horizon in trading days (default <code>21</code> ≈ 1 month; range 1–252). Daily simulated returns are compounded over this period.</dd>
+          </div>
+          <div class="help-row">
+            <dt>Confidence Level (90% / 95% / 99%)</dt>
+            <dd>Defines the tail cutoff. At 95%, VaR and ES measure the worst 5% of simulated outcomes.</dd>
+          </div>
+          <div class="help-row">
+            <dt>Monte Carlo Paths</dt>
+            <dd>Number of simulated future scenarios generated (default <code>10,000</code>; range 500–50,000).</dd>
+          </div>
+          <div class="help-row">
+            <dt>Use Cholesky Correlation Matrix</dt>
+            <dd>When checked, simulated shocks move together based on historical correlations. Uncheck to see how much risk is hidden if you assume stocks are independent.</dd>
+          </div>
+          <div class="help-row">
+            <dt>Stress Blend (&alpha;)</dt>
+            <dd>Slides correlations from historical (<code>0.00</code>) toward a market-crash regime (<code>0.97</code>) via <code>R(&alpha;) = (1 &minus; &alpha;)R<sub>hist</sub> + &alpha;J</code>.</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="help-section">
+        <h2>Key Terminologies</h2>
+        <dl class="help-list">
+          <div class="help-row">
+            <dt>Monte Carlo Simulation</dt>
+            <dd>Generates thousands of random future return paths using historical mean, volatility, and correlation to map the full distribution of possible portfolio outcomes.</dd>
+          </div>
+          <div class="help-row">
+            <dt>Cholesky Decomposition</dt>
+            <dd>A matrix factorization (<code>R = L &middot; L<sup>T</sup></code>) that transforms independent random normal shocks into correlated shocks matching your stocks' real-world co-movement.</dd>
+          </div>
+          <div class="help-row">
+            <dt>Annualized Return &amp; Volatility</dt>
+            <dd>Scales daily average return by <code>252</code> trading days and daily standard deviation by <code>&radic;252</code> to express expected return and risk on a yearly basis.</dd>
+          </div>
+          <div class="help-row">
+            <dt>Correlation (&rho;) &amp; Diversification</dt>
+            <dd>Measures how two stocks move together (<code>-1</code> to <code>+1</code>). Lower correlation reduces portfolio swings because losses in one stock can be offset by another.</dd>
+          </div>
+          <div class="help-row">
+            <dt>Correlation Breakdown</dt>
+            <dd>During market panics, correlations spike toward <code>+1</code> simultaneously, causing diversification to fail when it is needed most.</dd>
+          </div>
+          <div class="help-row">
+            <dt>Value at Risk (VaR)</dt>
+            <dd>The loss threshold at your chosen confidence level (e.g., 5th percentile at 95% confidence).</dd>
+          </div>
+          <div class="help-row">
+            <dt>Expected Shortfall (ES / CVaR)</dt>
+            <dd>The average loss across all tail outcomes worse than VaR, capturing extreme crash severity.</dd>
+          </div>
+        </dl>
+      </section>
+    </div>
+  </dialog>
+
+  <script src="/app.js"></script>
+</body>
+</html>
