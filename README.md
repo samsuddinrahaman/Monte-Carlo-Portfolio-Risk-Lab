@@ -16,6 +16,12 @@ An interactive portfolio risk engine and web dashboard for Indian equities (**NS
   - Built-in **Help** modal (`<dialog>`) documenting all inputs and quantitative finance terminologies.
 - **CLI Mode (`monte_carlo_var.py`)**: Run simulations from the terminal and export `portfolio_risk_analysis.png`.
 
+## Architecture
+
+![Monte Carlo Portfolio Risk Lab Architecture](docs/architecture.png)
+
+*(Interactive self-contained diagram: `architecture.html`)*
+
 ## Project Structure
 
 ```text
@@ -24,6 +30,9 @@ montecarlo/
 ├── LICENSE                # MIT License
 ├── README.md              # Documentation & usage guide
 ├── app.py                 # Python HTTP server & JSON API (/api/simulate, /api/search)
+├── architecture.html      # Self-contained stack & architecture diagram
+├── docs/
+│   └── architecture.png   # Rendered architecture diagram for README
 ├── monte_carlo_var.py     # Core Monte Carlo VaR/ES engine & CLI tool
 ├── requirements.txt       # Python dependencies
 └── static/
